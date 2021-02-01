@@ -1,0 +1,498 @@
+---
+output:
+  html_document:
+    fig_caption: yes
+    fig_width: 5
+   
+---
+# __MetagenomeSeq__
+
+# __1.Introduction__
+
+Metagenomics is the genetic analysis that aims to determine a microbial population in a given environment (Sleator, Shortall and Hill, 2008). The goals of Metagenomics generally include: identifying functional genes and/or new metabolic pathways, estimating microbial diversity, understanding population dynamics for an entire community, assembling the genome of an organism, and identifying useful biomarkers to classify a type of process that occurred in a specific environment (Schulz _et al._, 2020).
+
+Currently, metagenomics has benefited from technological advances in DNA sequencing and statistical packages that allow its data's reproducibility (Calle, 2019). One of the packages used to reproduce metagenomics data is metagenomeSeq. The main objective of MetagenomeSeq is to determine the similarity and abundance of microorganisms in two or more groups of samples; address subsampling effects normalization in the detection of diseases, and determine correlations of characteristics. In this portfolio, data from different samples were analyzed and reproduced using statistical tools provided from the MetagemeSeq package.
+
+
+# __2.Meterial and Methods__
+
+The data used in this portfolio were obtained from the __Bioconductor__ [Page](http://www.bioconductor.org/packages/release/bioc/vignettes/metagenomeSeq/inst/doc/metagenomeSeq.pdf), where the first step was the installation of the MetagemeSeq package on Rstudio. 
+
+```{r}
+library(metagenomeSeq)
+```
+
+In MetagenomeSeq Package, the data must be converted into MRexperiment objects, so it will be easy to normalize data, run statistical tests and visualize the results.
+
+To to convert data into MRexperiment objects, the __BIOM Format package__ must be installed because it serves as a bridge to get MRexperiment-class object.
+
+
+## 2.1.Load BiomFile
+
+```{r}
+library(biomformat)
+biom_file <- system.file("extdata", "min_sparse_otu_table.biom", package = "biomformat")
+b <- read_biom(biom_file)
+biom2MRexperiment(b)
+```
+Follows an example of recording an mMR experiment object from a BIOM file.
+
+```{r}
+data(mouseData)
+b <- MRexperiment2biom(mouseData)
+```
+
+
+## 2.2.Loading Count Data
+
+After pre-processing and annotating the sequencing samples, MetagenomeSeq requires a counting matrix with samples along the columns and resources along the lines.
+
+In this example, using a pulmonary microbial, the OTU matrix is stored as a tab-delimited file. LoadMeta is used to loads the Taxa and counts as a list.
+
+```{r}
+dataDirectory <- system.file("extdata", package = "metagenomeSeq")
+lung = loadMeta(file.path(dataDirectory, "CHK_NAME.otus.count.csv"))
+dim(lung$counts)
+
+```
+
+## 2.3.Loading Taxonomy
+
+To load the annotated taxonomy, it is necessary to ensure that the OTUs and taxa annotations are in the same order as the matrix rows
+```{r}
+taxa = read.delim(file.path(dataDirectory, "CHK_otus.taxonomy.csv"),
+stringsAsFactors = FALSE)
+
+```
+
+## 2.4.Loading metadata
+
+This function provide the data as list.
+
+```{r}
+clin = loadPhenoData(file.path(dataDirectory, "CHK_clinical.csv"),
+tran = TRUE)
+ord = match(colnames(lung$counts), rownames(clin))
+clin = clin[ord, ]
+head(clin[1:2, ])
+
+```
+
+## 2.5.Creating new MRExperiment 
+
+The newMRexperiment function takes as input, a counting matrix, featureData, and phenoData. Normalization factors and cover depths are also input options. Biobase can be used to create annotated data frames.
+
+```{r}
+phenotypeData = AnnotatedDataFrame(clin)
+phenotypeData
+```
+
+It is possible to get annotated features using taxonomic annotation as shown below. 
+
+```{r}
+OTUdata = AnnotatedDataFrame(taxa)
+OTUdata
+
+```
+And then, we can view the MRexperiment data, using the option bellow.
+
+```{r}
+obj = newMRexperiment(lung$counts,phenoData=phenotypeData,featureData=OTUdata)
+obj
+
+```
+## 2.6.Data Sets
+
+Two types of data set were used as an example in the MetagenomeSeq package. One from the Human Lung microbiome and another from the Humanized gnotobiotic mouse gut. 
+
+The human Lung microbiome data were obtained from samples of the respiratory flora from six healthy individuals, three smokers and three non-smokers. Swabs were collected from the oral cavity and bronchoalveolar lavage.The data were presented in MRexperiment object format.
+
+```{r}
+data(lungData)
+lungData
+
+```
+For Humanized gnotobiotic mouse gut, twelve germ-free adult male mice were supplemented with a diet rich in low-fat vegetable polysaccharides. Each mouse was inoculated with fecal material from a healthy adult human.After inoculation, the mice remained on the same diet for four weeks. After four weeks, a subset of six went on a high fat and sugar diet for eight weeks.
+
+Fecal samples of each mouse were submitted to PCR weekly.
+
+```{r}
+data(mouseData)
+mouseData
+```
+
+## 2.7.Useful Comands
+
+Information of Phenotype can be accessed with the pData ad  phenoData methods:
+
+```{r}
+phenoData(obj)
+head(pData(obj),3)
+```
+
+
+Feature information can be accessed using the fData and featureData functions:
+
+```{r}
+featureData(obj)
+head(fData(obj)[, -c(2, 10)], 3)
+```
+
+
+The MRcounts function can be used to access the raw or normalized counts matrix
+
+```{r}
+head(MRcounts(obj[, 1:2]))
+```
+
+We can easily subdivide the MRexperimental-class object as follows:
+
+```{r}
+featuresToKeep = which(rowSums(obj)>=100)
+samplesToKeep = which(pData(obj)$SmokingStatus=="Smoker")
+obj_smokers = obj[featuresToKeep,samplesToKeep]
+obj_smokers
+head(pData(obj_smokers),3)
+```
+
+
+NormFactors function can be used to access normalization scaling factors:
+
+```{r}
+head(normFactors(obj))
+normFactors(obj) <- rnorm(ncol(obj))
+head(normFactors(obj))
+```
+
+Sequence depth can be accessed using libSize method:
+
+```{r}
+head(libSize(obj))
+libSize(obj) <- rnorm(ncol(obj))
+head(libSize(obj))
+```
+
+Besides, to preserve a threshold of minimum depth or OTU presence, data can be filtered
+
+```{r}
+data(mouseData)
+filterData(mouseData,present=10,depth=1000)
+
+```
+
+The mergeMRexperiments function can be used to merge two objects of the MRexperiment class
+
+```{r}
+data(mouseData)
+newobj = mergeMRexperiments(mouseData,mouseData)
+newobj
+```
+
+## 2.8.Normalization
+
+Normalization is essential, as samples can have different depths coverage. cumNorm is a function used to calculate normalization factors. Alternatively, Wrench can be used. 
+
+
+Calculating Normalization Factors
+
+```{r}
+data(lungData)
+p=cumNormStatFast(lungData)
+```
+
+```{r}
+lungData = cumNorm(lungData,p=p)
+```
+
+
+Calculating normalization factors using Wrench
+
+wrench function  is similar to cumNorm; however, it uses the `condition` as an argument instead of `p`.  `Condition` separates samples according to the phenotypic groups of interest.
+
+```{r}
+condition = mouseData$diet
+mouseData = wrenchNorm(mouseData,condition=condition)
+```
+
+
+## 2.9.Exporting data
+
+Normalized count matrices can be exported using the following commands: 
+
+```{r}
+mat = MRcounts(lungData, norm = TRUE, log = TRUE)[1:5, 1:5]
+exportMat(mat, file = file.path(dataDirectory, "tmp.tsv"))
+
+```
+
+To save the statistic of exported data (library size,quantile value, sample scaling factor, number of identified features) `exportStats` function
+
+```{r}
+exportStats(lungData[,1:5],file=file.path(dataDirectory,"tmp.tsv"))
+head(read.csv(file=file.path(dataDirectory,"tmp.tsv"),sep="\t"))
+```
+```{r}
+system(paste("rm",file.path(dataDirectory,"tmp.tsv")))
+```
+
+## 3.Statistical testing
+
+After normalization, we can evaluate subsampling effects on detecting the differentially abundant characteristic. And for that, we can use __fitFeatureModel__ or __fitzig__. The __MRfulltable__, __MRcoefs__, __MRtable__ are summary tables for outputs.
+
+
+follows an example of pulmonary microbiome comparison between smokers and nonsmokers
+
+```{r}
+data(lungData)
+lungData = lungData[,-which(is.na(pData(lungData)$SmokingStatus))]
+lungData=filterData(lungData,present=30,depth=1)
+lungData <- cumNorm(lungData, p=.5)
+pd <- pData(lungData)
+mod <- model.matrix(~1+SmokingStatus, data=pd)
+lungres1 = fitFeatureModel(lungData,mod)
+head(MRcoefs(lungres1))
+```
+
+
+Using __fitZig__ for differential abundance testing 
+
+The user must restrict significant resources. In the pulmonary microbiome analysis, we can remove controls, and characteristics absent in many samples, and calculate the normalization factors.
+
+```{r}
+data(lungData)
+controls = grep("Extraction.Control",pData(lungData)$SampleType)
+lungTrim = lungData[,-controls]
+rareFeatures = which(rowSums(MRcounts(lungTrim)>0)<10)
+lungTrim = lungTrim[-rareFeatures,]
+lungp = cumNormStat(lungTrim,pFlag=TRUE,main="Trimmed lung data")
+lungTrim = cumNorm(lungTrim,p=lungp)
+```
+
+After defining an appropriate model matrix, there are optional entries for _fitZig_, including configurations by zigControl. This example includes body site as covariates, and we want to test differentially abundant bacteria between smokers and non-smokers.
+
+```{r}
+smokingStatus = pData(lungTrim)$SmokingStatus
+bodySite = pData(lungTrim)$SampleType
+normFactor = normFactors(lungTrim)
+normFactor = log2(normFactor/median(normFactor) + 1)
+mod = model.matrix(~smokingStatus+bodySite + normFactor)
+settings = zigControl(maxit=10,verbose=TRUE)
+fit = fitZig(obj = lungTrim,mod=mod,useCSSoffset = FALSE, 
+             control=settings)
+```
+
+Running fitZig by default, the covariate adjustment must be added to the design matrix, as it is crucial for contrast.
+
+```{r}
+settings = zigControl(maxit=1,verbose=FALSE)
+mod = model.matrix(~bodySite)
+colnames(mod) = levels(bodySite)
+res = fitZig(obj = lungTrim,mod=mod,control=settings)
+zigFit = slot(res,"fit")
+finalMod = slot(res,"fit")$design
+contrast.matrix = makeContrasts(BAL.A-BAL.B,OW-PSB,levels=finalMod)
+fit2 = contrasts.fit(zigFit, contrast.matrix)
+fit2 = eBayes(fit2)
+topTable(fit2)
+```
+
+To consider characteristics in abundance, the option `MRcoefs` can be used in the MR tables in a specific group.
+
+```{r}
+taxa = 
+  sapply(strsplit(as.character(fData(lungTrim)$taxa),split=";"),
+         function(i){i[length(i)]})
+head(MRcoefs(fit,taxa=taxa,coef=2))
+```
+Looking for this output, we can observe two __Neisseria__, two __Prevotella__, a __Leptotrichia__, and __Porphyromonas__ are differentially abundant.
+
+
+The `coef` parameter refers to the coefficient of interest to be tested. We can see the previous model using the `fitLogNormal` parameter, which provides the p-value resolution for ten.
+
+```{r}
+coeffOfInterest = 2
+res = fitLogNormal(obj = lungTrim, mod = mod, useCSSoffset = FALSE,
+B = 10, coef = coeffOfInterest)
+adjustedPvalues = p.adjust(res$p, method = "fdr")
+foldChange = abs(res$fit$coef[, coeffOfInterest])
+sigList = which(adjustedPvalues <= 0.05)
+sigList = sigList[order(foldChange[sigList])]
+head(taxa[sigList])
+
+```
+Making adjustments on Pvalue, we can observe other bacterial species of the pulmonary flora.
+
+
+## 3.1.Presence Absence
+
+The presence-absence test's idea is to assess whether a particular characteristic is in a greater/lesser proportion between groups of individuals. The `fitPA` parameter can be used to calculate the presence-absence for each organism.
+
+```{r}
+classes = pData(mouseData)$diet
+res = fitPA(mouseData[1:5,],cl=classes)
+classes = pData(mouseData)$diet
+res = fitDO(mouseData[1:100,],cl=classes,norm=FALSE,log=FALSE)
+head(res)
+```
+
+
+
+# 3.2.Feature correlations
+
+`CorrelationTest` can be used to correlate the classes of microorganisms.
+
+```{r}
+cors = correlationTest(mouseData[55:60, ], norm = FALSE, log = FALSE)
+head(cors)
+
+```
+
+## 3.3.Unique OTUs or features
+
+The `uniqueFeatures` function is used To track missing resources in any number of classes; The `uniqueFeatures` function provides a table of resource ids, the number of positive resources, and readings for each group.
+
+```{r}
+cl = pData(mouseData)[["diet"]]
+uniqueFeatures(mouseData,cl,nsamples = 10,nreads = 100)
+```
+
+## 3.4 Aggregating counts
+
+The `ggTax` function in an MRexperiment can be used to aggregate the counting matrix (normalized or not) at the user's desired level
+
+```{r}
+obj = aggTax(mouseData,lvl='phylum',out='matrix')
+head(obj[1:5,1:5])
+```
+
+Sample aggregation can also be done using the `aggregateBySample` or `aggsamp` function, selecting the column of interest.
+
+```{r}
+obj = aggSamp(mouseData,fct='mouseID',out='matrix')
+head(obj[1:5,1:5])
+```
+
+## __4.Results__
+
+To visualize the analyzed data, metagenomeSeq has several plotting functions.
+
+To access the abundance heatmap we use the `plotMRheatmap` function:
+
+```{r}
+trials = pData(mouseData)$diet
+heatmapColColors=brewer.pal(12,"Set3")[as.integer(factor(trials))];
+heatmapCols = colorRampPalette(brewer.pal(9, "RdBu"))(50)
+```
+
+```{r fig.cap="__Figure1.__ Taxonomic comparison of all samples: Red values indicate counts close to zero. The Row color labels indicate OTU taxonomic class; column color labels indicate diet (green = high fat, yellow = low fat)"}
+trials = pData(mouseData)$diet
+heatmapColColors=brewer.pal(12,"Set3")[as.integer(factor(trials))];
+heatmapCols = colorRampPalette(brewer.pal(9, "RdBu"))(50)
+plotMRheatmap(obj=mouseData,n=200,cexRow = 0.4,cexCol = 0.4,trace="none",
+                col = heatmapCols,ColSideColors = heatmapColColors)
+
+```
+
+
+
+
+
+For basic correlation structures we use `plotCorr` function
+
+```{r fig.cap="__Figure2.__ Taxonomic correlation"}
+plotCorr(obj = mouseData, n = 200, cexRow = 0.25, cexCol = 0.25,
+trace = "none", dendrogram = "none", col = heatmapCols)
+
+```
+
+
+
+For principal coordinate analyses (PcoA) we use `plotOrd` ,and for rarefaction effects `plotRare`
+
+```{r fig.cap="__Figure3.__ principal coordinate analyses (PCoA) comparison from groups submitted to different diets)"}
+cl = factor(pData(mouseData)$diet)
+plotOrd(mouseData,tran=TRUE,usePCA=FALSE,useDist=TRUE,bg=cl,pch=21)
+
+```
+
+
+```{r fig.cap="__Figure4.__ Rarefaction effect"}
+res = plotRare(mouseData,cl=cl,pch=21,bg=cl)
+tmp=lapply(levels(cl), function(lv) 
+  lm(res[,"ident"]~res[,"libSize"]-1, subset=cl==lv))
+for(i in 1:length(levels(cl))){
+   abline(tmp[[i]], col=i)
+}
+legend("topleft", c("Diet 1","Diet 2"), text.col=c(1,2),box.col=NA)
+```
+
+
+## Feature specific
+
+In the MetagenomeSeq package, `plotOTU` was used to plot the _Neisseria meningitidis_ normalized log (cpt) present in the 779th line of the lungTrim counting matrix. And `plotGenus` was used to plot the normalized log (cpt) of all _Neisseria meningitidis_ annotated. 
+
+```{r fig.cap="__Figure5.__ Abundance between two groups of comparison"}
+head(MRtable(fit,coef=2,taxa=1:length(fData(lungTrim)$taxa)))
+patients=sapply(strsplit(rownames(pData(lungTrim)),split="_"),
+          function(i){
+            i[3]
+          })
+pData(lungTrim)$patients=patients
+classIndex=list(smoker=which(pData(lungTrim)$SmokingStatus=="Smoker"))
+classIndex$nonsmoker=which(pData(lungTrim)$SmokingStatus=="NonSmoker")
+otu = 779
+plotOTU(lungTrim,otu=otu,classIndex,main="Neisseria meningitidis")
+x = fData(lungTrim)$taxa[otu]
+otulist = grep(x,fData(lungTrim)$taxa)
+
+```
+
+```{r fig.cap= "__Figure6__. Multiple OTU abundances in groups of comparison"}
+
+plotGenus(lungTrim, otulist, classIndex, labs = FALSE, main = "Neisseria meningitidis")
+lablist <- c("S", "NS")
+axis(1, at = seq(1, 6, by = 1), labels = rep(lablist, times = 3))
+```
+ 
+ 
+```{r fig.cap="__Figure7.__ Raw reads abundances"}
+classIndex = list(Western = which(pData(mouseData)$diet == "Western"))
+classIndex$BK = which(pData(mouseData)$diet == "BK")
+otuIndex = 8770
+dates = pData(mouseData)$date
+plotFeature(mouseData, norm = FALSE, log = FALSE, otuIndex, classIndex,
+col = dates, sortby = dates, ylab = "Raw reads")
+```
+ 
+ 
+ 
+# __4.Discussion__
+
+## Data Mouse
+
+Analyzing data mouse from MetagenomeSeq package, we can see that mice supplemented with a low-fat diet have more abundance of Lachnospiraceae family. In contrast, mice supplemented with a high-fat diet have abundance of Lactococcus, followed by Lachnospiraceae (see Figure 1). All families have a similar correlation on the diagonal line(Figure 2).
+
+The  Analises of PcoA compares the variance in 2 different groups of diet. The diet1 is represented on the Top on the left side, and Diet2 is on the top too, on the right side. Analyzing CP1 (on the x-axis), We can clearly see a variance in diet2, creating a separation from Diet1.
+Analyzing Cp2 (Y-axis), Diet1 tend to be close together and we don’t see much variance with Diet2.
+(Figure 3).
+
+In Figure 4, the population of microorganisms from Diet2 needs a small number of readings to obtain high associated characteristics; In contrast, the group of microorganisms from Diet1 needs many readings to achieve high associated resources (Figure 4).
+
+
+## Data from Human lung microbiome
+
+In the human lung microbiome, __Neisseria meningitidis__ was differentially more abundant in nonsmokers (Figure5 and 6).
+
+
+# __5.Conclusion__
+
+MetagenomeSeq is a useful package and is important to understand variances in a community of microorganisms due to phenotypic differences.  Using MetagemeSeq we can do differential abundance analyses to evaluate microorganisms' similarities and genetic diversity. Additionally, we can identify species involved in various diseases, and we can outline preventive measures and treatment strategies para for diseases.
+
+## __References__
+
+1.Calle, M. L. (2019) 'Statistical Analysis of Metagenomics Data', Genomics & informatics, 17(1), pp. e6-e6.
+
+2.Schulz, F., Andreani, J., Francis, R., Boudjemaa, H., Bou Khalil, J. Y., Lee, J., La Scola, B. and Woyke, T. (2020) 'Advantages and Limits of Metagenomic Assembly and Binning of a Giant Virus', mSystems, 5(3), pp. e00048-20.
+
+3.Sleator, R. D., Shortall, C. and Hill, C. (2008) 'Metagenomics', Letters in applied microbiology, 47(5), pp. 361-366.
+
