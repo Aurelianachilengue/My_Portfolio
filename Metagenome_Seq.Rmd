@@ -1,6 +1,6 @@
 ---
 output:
-  html_document:
+  MD_document:
     fig_caption: yes
     fig_width: 5
    
