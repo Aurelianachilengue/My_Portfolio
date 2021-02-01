@@ -1,9 +1,5 @@
 ---
-output:
-  MD_document:
-    fig_caption: yes
-    fig_width: 5
-   
+title: "Metagenome_Seq"
 ---
 # __MetagenomeSeq__
 
